@@ -15,13 +15,16 @@
 // this way, link this package into you program:
 // import _ "expvar"
 
-package expvar
+package expvar2
 
 import (
 	"encoding/json"
 	"fmt"
 	"log"
 	"math"
+	"net/http"
+	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -92,7 +95,7 @@ type Map struct {
 }
 
 type KeyValue struct {
-	key   string
+	Key   string
 	Value Var
 }
 
@@ -105,7 +108,7 @@ func (v *Map) String() string {
 		if !first {
 			fmt.Fprintf(&b, ", ")
 		}
-		fmt.Fprintf(&b, "%q: %v", kv.key, kv.Value)
+		fmt.Fprintf(&b, "%q: %v", kv.Key, kv.Value)
 		first = false
 	})
 	fmt.Fprintf(&b, "}")
@@ -292,8 +295,56 @@ func NewMap(name string) *Map {
 	Publish(name, v)
 	return v
 }
+
 func NewString(name string) *String {
 	v := new(String)
 	Publish(name, v)
 	return v
+}
+
+// Do calls f for each exported variable.
+// The global variable map is locked during the iteration,
+// but existing entries may be concurrently updated.
+func Do(f func(KeyValue)) {
+	varKeysMu.RLock()
+	defer varKeysMu.RUnlock()
+	for _, k := range varKeys {
+		val, _ := vars.Load(k)
+		f(KeyValue{k, val.(Var)})
+	}
+}
+
+func expvarHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	fmt.Fprintf(w, "{\n")
+	first := true
+	Do(func(kv KeyValue) {
+		if !first {
+			fmt.Fprintf(w, ",\n")
+		}
+		first = false
+		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+	})
+	fmt.Fprintf(w, "\n}\n")
+}
+
+// Handler returns the expvar HTTP Handler
+func Handler() http.Handler {
+	return http.HandlerFunc(expvarHandler)
+}
+
+func cmdline() interface{} {
+	return os.Args
+}
+
+func memstats() interface{} {
+	stats := new(runtime.MemStats)
+	runtime.ReadMemStats(stats)
+	return *stats
+}
+
+func init() {
+	http.HandleFunc("/debug/vars", expvarHandler)
+	Publish("cmdline", Func(cmdline))
+	Publish("memstat", Func(memstats))
 }

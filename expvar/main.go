@@ -1,18 +1,32 @@
 package main
 
 import (
-	"expvar"
 	"net/http"
 	"time"
+
+	expvar2 "learn/copy/expvar/expvar"
 )
 
-func main() {
+//func standExpvar() {
+//	lastAccess := expvar.NewString("lastAccess")
+//	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+//		w.Write([]byte("hello"))
+//		lastAccess.Set(time.Now().String())
+//	})
+//
+//	http.ListenAndServe(":8080", nil)
+//}
 
-	lastAccess := expvar.NewString("lastAccess")
+func customExpvar() {
+	lastAccess := expvar2.NewString("lastAccess")
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte("hello"))
 		lastAccess.Set(time.Now().String())
 	})
 
 	http.ListenAndServe(":8080", nil)
+}
+
+func main() {
+	customExpvar()
 }
